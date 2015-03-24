@@ -26,8 +26,8 @@ class GithubIssues < BaseHandler
         puts "Creating a new github issue for: #{summary} on project #{project}"
 
         # attempt to create labels
-        client.add_label(project, host_label_name, "cccccc")
-        client.add_label(project, check_label_name, "cccccc")
+        client.add_label(project, host_label_name, "cccccc") rescue nil
+        client.add_label(project, check_label_name, "cccccc") rescue nil
 
         issue = client.create_issue(
           project,
