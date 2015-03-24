@@ -42,6 +42,8 @@ class sensu_handlers(
   $teams,
   $package_ensure        = 'latest',
   $default_handler_array = [ 'nodebot', 'pagerduty', 'mailer', 'jira' ],
+  $github_username       = 'sensu',
+  $github_access_token   = '',
   $jira_username         = 'sensu',
   $jira_password         = 'sensu',
   $jira_site             = "jira.${::domain}",
