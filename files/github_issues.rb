@@ -2,7 +2,7 @@
 
 require "#{File.dirname(__FILE__)}/base"
 
-class GithubIssues < BaseHandler
+class Github_Issues < BaseHandler
 
   def create_issue(summary, full_description, project)
     begin
