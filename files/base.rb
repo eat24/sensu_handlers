@@ -55,7 +55,7 @@ class BaseHandler < Sensu::Handler
 
   def team_data(lookup_key = nil)
     return unless team_name
-    data = settings[self.class.name.downcase]['teams'][team_name] || {}
+    data = handler_settings['teams'][team_name] || {}
     if lookup_key
       data = data[lookup_key]
     end
@@ -67,9 +67,12 @@ class BaseHandler < Sensu::Handler
     @event['check']['tip']
   end
 
-  def description(maxlen=0)
+  def description(maxlen=100000)
     description = @event['check']['notification']
-    description ||= [@event['client']['name'], @event['check']['name'], @event['check']['output']].join(' : ')
+    client_display_name = @event['client']['tags']['Display Name'] rescue nil
+    client_display_name = @event['client']['name'] if
+      client_display_name.nil? || client_display_name.empty?
+    description ||= [client_display_name, @event['check']['name'], uncolorize(@event['check']['output'])].join(' : ')
     if event_is_critical? or event_is_warning?
       toadd = ""
       if tip
@@ -78,15 +81,9 @@ class BaseHandler < Sensu::Handler
       if runbook
         toadd = "#{toadd} (#{runbook})"
       end
-      if maxlen > 0 && (toadd.length + description.length) > maxlen
-        description_size = maxlen - toadd.length - 1
-        if description_size > 0
-          description = description[0..description_size]
-        end
-      end
       description = "#{description}#{toadd}"
     end
-    description.gsub("\n", ' ')
+    description.gsub("\n", ' ')[0..maxlen-1]
   end
 
   def full_description
@@ -176,7 +173,10 @@ BODY
       interval      = @event['check']['interval'].to_i || 0
     end
     alert_after   = @event['check']['alert_after'].to_i || 0
-    realert_every = @event['check']['realert_every'].to_i || 1
+
+    # nil.to_i == 0
+    # 0 || 1   == 0
+    realert_every = ( @event['check']['realert_every'] || 1 ).to_i 
 
     initial_failing_occurrences = interval > 0 ? (alert_after / interval) : 0
     number_of_failed_attempts = @event['occurrences'] - initial_failing_occurrences
@@ -213,6 +213,64 @@ BODY
     end
     x==1
   end
+
+  def settings_key
+    self.class.name.downcase
+  end
+
+  def handler_settings
+    settings[settings_key]
+  end
+
+
+  ##################################
+  ## channels helper for chat handlers
+  def channel_keys
+    %w[ channel room ]
+  end
+
+  def pager_channel_keys
+    %w[ pager_channel pager_room ]
+  end
+
+  def find_channel(keys, &block)
+    keys \
+      .map(&block) \
+      .detect { |item| item } # first non nil/false item
+  end
+
+  def event_channel(keys = channel_keys)
+    find_channel(keys) { |key| @event['check'][key] }
+  end
+
+  def team_channel(keys = channel_keys)
+    find_channel(keys) { |key| team_data(key) }
+  end
+
+  def event_pager_channel
+    event_channel(pager_channel_keys)
+  end
+
+  def team_pager_channel
+    team_channel(pager_channel_keys)
+  end
+
+  def notifications_channel
+    event_channel || team_channel || []
+  end
+
+  def pager_channel
+    event_pager_channel || team_pager_channel || []
+  end
+
+  def channels
+    channels = []
+    channels.push pager_channel if should_page?
+    channels.push notifications_channel
+    channels.flatten
+  end
+  ## end channels helper
+  #####################################
 
 end
 

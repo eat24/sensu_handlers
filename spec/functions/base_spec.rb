@@ -115,6 +115,16 @@ describe BaseHandler do
         end
       end
     end
+    context 'handles character limit when needed' do
+      before(:each) do
+        setup_event! do |e|
+          e['check']['status'] = 2
+          e['check']['runbook'] = 'http://some.runbook'
+          e['check']['tip'] = 'Reee' + 'e'*1000 + 'ly long tip'
+        end
+      end
+      it { expect(subject.description(42).length).to eq(42) }
+    end
   end
 
   context "full_description" do
@@ -332,6 +342,165 @@ describe BaseHandler do
         expect(subject.filter_repeated).to eql(nil)
       end
     end
+    context "when realert_every is not set" do
+      it "treats realert_every as 1" do
+        subject.event['occurrences'] = 6
+        subject.event['check']['interval'] = 20
+        subject.event['check']['alert_after'] = 60
+        subject.event['check'].delete('realert_every')
+        subject.event['action'] = 'create'
+        expect(subject).not_to receive(:bail)
+        expect(subject.filter_repeated).to eql(nil)
+      end
+    end
   end #End filter repeated
 
-end # End describe  
+  context "With display name tag" do
+    context "When display tag is not set" do
+      before(:each) do
+        setup_event! { |e|
+          e['client']['name'] = 'foo.bar'
+          e['client']['tags'] = { }
+        }
+      end
+      it {
+        expect(subject.description).to match(/^foo.bar :/)
+      }
+    end
+
+    context "When display tag is set to empty string" do
+      before(:each) do
+        setup_event! { |e|
+          e['client']['name'] = 'foo.bar'
+          e['client']['tags'] = { 'Display Name' => '' }
+        }
+      end
+      it {
+        expect(subject.description).to match(/^foo.bar :/)
+      }
+    end
+
+    context "When display tag is set" do
+      before(:each) do
+        setup_event! { |e|
+          e['client']['name'] = 'foo.bar'
+          e['client']['tags'] = { 'Display Name' => 'baz.qux' }
+        }
+      end
+      it {
+        expect(subject.description).to match(/^baz.qux :/)
+      }
+    end
+  end # End of context 'With display name tag'
+
+
+  describe "#channels" do
+    let(:team)       { 'someteam' }
+    let(:settings)   { subject.settings[settings_key] }
+    let(:team_data)  { settings['teams'][team] }
+    let(:check_data) { subject.event['check'] }
+    let(:channels)   { subject.channels }
+
+    before do
+      setup_event!({
+        'check' => { 'team' => team }
+      })
+
+      # must come after setup_event!
+      settings['teams'][team] = {}
+    end
+
+
+    context "when event is set to page" do
+      before { check_data['page'] = true }
+
+      context "with no team or event level config"  do
+        it { expect(channels).to eq [] }
+      end
+
+      context "with both notification and pager channels configured at team leavel" do
+        before do
+          team_data['channel']       = 'notify_channel'
+          team_data['pager_channel'] = 'pager_channel'
+        end
+
+        context "with no config at event level"  do
+          it "returns both the pager and notification channels" do
+            expect(channels).to eq ['pager_channel', 'notify_channel']
+          end
+        end
+
+        context "with channel set at event level" do
+          before { check_data['channel'] = 'notify_channel_from_event' }
+          it "prefers event channel" do
+            expect(channels).to eq ['pager_channel', 'notify_channel_from_event']
+          end
+        end
+
+        context "with pager_channel set at event level" do
+          before { check_data['pager_channel'] = 'pager_channel_from_event' }
+          it "prefers event pager_channel" do
+            expect(channels).to eq ['pager_channel_from_event', 'notify_channel']
+          end
+        end
+      end
+
+      context "alternate key names" do
+        before do
+          team_data['room']       = 'notify_channel'
+          team_data['pager_room'] = 'pager_channel'
+        end
+        it "returns both the pager and notification channels" do
+          expect(channels).to eq ['pager_channel', 'notify_channel']
+        end
+      end
+
+      context "when configured with lists of channels" do
+        before do
+          team_data['channel']       = ['notify_channel', 'notify_channel2']
+          team_data['pager_channel'] = ['pager_channel', 'pager_channel2']
+          check_data['channel']      = ['notify_channel_from_event', 'blah']
+        end
+        it "returns all the pager and notification channels" do
+          expect(channels).to eq [
+            'pager_channel',
+            'pager_channel2',
+            'notify_channel_from_event',
+            'blah'
+          ]
+        end
+      end
+    end
+
+    context "when event is not set to page" do
+      before { check_data.delete('page') }
+
+      context "with no team or event config" do
+        it { expect(channels).to eq [] }
+      end
+
+      context "with team channel configured" do
+        before do
+          team_data['channel']       = 'notify_channel'
+          team_data['pager_channel'] = 'pager_channel'
+        end
+
+        context "and no event channel configured" do
+          it { expect(channels).to eq ['notify_channel'] }
+        end
+
+        context "and event channel configured" do
+          before { check_data['channel'] = 'notify_channel_from_event' }
+          it "prefers event channel" do
+            expect(channels).to eq ['notify_channel_from_event']
+          end
+        end
+      end
+
+    end
+
+
+  end
+
+
+end # End describe

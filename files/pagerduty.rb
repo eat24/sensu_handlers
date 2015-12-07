@@ -3,8 +3,12 @@
 require "#{File.dirname(__FILE__)}/base"
 
 class Pagerduty < BaseHandler
+  def habitat
+    @event['check']['habitat']
+  end
+
   def incident_key
-    @event['client']['name'] + '/' + @event['check']['name']
+    "sensu #{habitat} #{@event['client']['name']} #{@event['check']['name']}"
   end
 
   def api_key
@@ -14,12 +18,18 @@ class Pagerduty < BaseHandler
   def trigger_incident
     return false unless api_key
     require 'redphone/pagerduty'
-    Redphone::Pagerduty.trigger_incident(
+    response = Redphone::Pagerduty.trigger_incident(
       :service_key  => api_key,
       :incident_key => incident_key,
-      :description  => description,
+      :description  => description(140),
       :details      => full_description_hash
-    )['status'] == 'success'
+    )['status']
+    if response == 'success'
+      true
+    else
+      log response
+      false
+    end
   end
 
   def resolve_incident

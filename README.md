@@ -95,10 +95,6 @@ This is a modification of the `ec2_node` community handler. It caches the list
 of ec2 instances from the Amazon API and will automatically remove servers
 from Sensu if they do not exist in the API.
 
-#### graphite
-
-Standard handler, sends graphite metrics.
-
 ## Puppet Usage
 
 If you are using the module itself, it can deploy the handlers and configure them.
@@ -179,6 +175,19 @@ sensu_handlers::teams:
 * *`notification_email: 'operations@localhost'`* - If set, the handler will send emails for every event to this address. If ommited it will send no emails. You can send the email to multiple destinations by using comma separated list (like any email client)
 * *`project: OPS`* - Used by the JIRA handler. If a event comes in that has `ticket=>true`, the jira handler will open a ticket on this project. There no default for this parameter. Special considerations have to be made for the JIRA project to enable auto-opening and auto-closing of tickets, see the docs on the jira handler.
 
-=== Support
+
+### Manually Invoking These Handlers
+
+You can manually invoke these handlers in order to test them, ensuring that (for example) 
+a JIRA ticket is correctly raised. Simply pipe the Sensu alert in JSON into one of the 
+handlers, and it should parse it as if it were a fresh alert.
+
+```
+$ grep 'failed' /var/log/sensu/sensu-server.log  | tail -n 1 | jq .event > last_failed_event.json
+$ cat last_failed_event | sudo -u sensu ruby jira.rb
+```
+
+
+### Support
 
 Please open a github issue for support.

@@ -4,6 +4,12 @@ require "#{File.dirname(__FILE__)}/base"
 
 class Jira < BaseHandler
 
+  def build_labels
+    [ "SENSU_#{@event['client']['name']}",
+      "SENSU_#{@event['check']['name']}",
+      "SENSU", *@event['check']['tags'] ].uniq.reject { |x| x.nil? }
+  end
+
   def create_issue(summary, full_description, project)
     begin
       require 'jira'
@@ -25,11 +31,7 @@ class Jira < BaseHandler
             "description"=> full_description,
             "project"=> { "id"=>project_id },
             "issuetype"=> {"id"=>1},
-            "labels" => [
-               "SENSU_#{@event['client']['name']}",
-               "SENSU_#{@event['check']['name']}",
-               "SENSU"
-            ]
+            "labels" => build_labels
           }
         }
         issue.save(issue_json)
@@ -109,9 +111,9 @@ class Jira < BaseHandler
 
   def get_options
     options = {
-      :username         => settings['jira']['username'],
-      :password         => settings['jira']['password'],
-      :site             => settings['jira']['site'],
+      :username         => handler_settings['username'],
+      :password         => handler_settings['password'],
+      :site             => handler_settings['site'],
       :context_path     => '',
       :auth_type        => :basic,
       :use_ssl          => true,
